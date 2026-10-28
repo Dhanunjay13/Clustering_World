@@ -1,6 +1,8 @@
 from io import StringIO
 from pathlib import Path
 import json
+import shutil
+import tempfile
 
 import pandas as pd
 import streamlit as st
@@ -11,9 +13,6 @@ from model_utils import load_bundle, predict_profiles
 
 BASE = Path(__file__).resolve().parent
 
-MODEL_PATH = BASE / "model" / "country_clustering.joblib"
-FRONTEND = BASE / "frontend"
-
 
 st.set_page_config(
     page_title="World Development | Cluster Explorer",
@@ -21,69 +20,188 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+
 # Make the dashboard use the full page.
 st.markdown(
     """
     <style>
-        [data-testid="stHeader"],
-        [data-testid="stToolbar"],
-        footer {
-            display: none;
-        }
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    footer {
+        display: none;
+    }
 
-        [data-testid="stMainBlockContainer"] {
-            padding: 0;
-            max-width: 100%;
-        }
-
-        .block-container {
-            padding: 0;
-            max-width: 100%;
-        }
+    [data-testid="stMainBlockContainer"],
+    .block-container {
+        padding: 0;
+        max-width: 100%;
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 
-if (
-    not MODEL_PATH.exists()
-    or not (FRONTEND / "data.json").exists()
-):
+def find_file(name, directories):
+    """Find a file in the repository root or a subfolder."""
+
+    for directory in directories:
+        path = directory / name
+
+        if path.is_file():
+            return path
+
+    return None
+
+
+# Find the model in either the root or model/ folder.
+model_path = find_file(
+    "country_clustering.joblib",
+    [
+        BASE,
+        BASE / "model"
+    ]
+)
+
+
+# Find each dashboard file in either frontend/ or the root.
+frontend_names = [
+    "index.html",
+    "styles.css",
+    "app.js",
+    "data.json"
+]
+
+frontend_sources = {
+    name: find_file(
+        name,
+        [
+            BASE / "frontend",
+            BASE
+        ]
+    )
+    for name in frontend_names
+}
+
+
+# Show the exact missing filename if something is absent.
+missing = [
+    name
+    for name, path in frontend_sources.items()
+    if path is None
+]
+
+if model_path is None:
+    missing.append("country_clustering.joblib")
+
+if missing:
     st.error(
-        "Model or dashboard data is missing. "
-        "Run the model-saving and dashboard-data cells first."
+        "Missing files in the GitHub repository: "
+        + ", ".join(missing)
     )
     st.stop()
 
 
 @st.cache_resource
-def get_model(model_path, last_modified):
-    return load_bundle(Path(model_path))
+def prepare_frontend(source_paths, timestamps):
+    """Prepare the dashboard files for the Streamlit component."""
+
+    folder = Path(
+        tempfile.mkdtemp(prefix="cluster_dashboard_")
+    )
+
+    for source in source_paths:
+        source = Path(source)
+
+        shutil.copy2(
+            source,
+            folder / source.name
+        )
+
+    # Create model.js for the dashboard CSV downloads.
+    (folder / "model.js").write_text(
+        r'''
+window.CountryModel = {
+  toCsv(rows, columns) {
+    function cell(value, isCountry) {
+      if (value == null) return "";
+
+      let text = String(value);
+
+      if (isCountry && /^[=+@-]/.test(text.trimStart())) {
+        text = "'" + text;
+      }
+
+      return /[",\r\n]/.test(text)
+        ? '"' + text.replace(/"/g, '""') + '"'
+        : text;
+    }
+
+    const header = columns.map(
+      c => cell(c, false)
+    ).join(",");
+
+    const data = rows.map(
+      row => columns.map(
+        c => cell(row[c], c === "Country")
+      ).join(",")
+    );
+
+    return "\uFEFF" + [header, ...data].join("\r\n");
+  }
+};
+''',
+        encoding="utf-8"
+    )
+
+    return str(folder)
 
 
-# Load the trained model.
-bundle = get_model(
-    str(MODEL_PATH),
-    MODEL_PATH.stat().st_mtime_ns
+@st.cache_resource
+def get_model(path, last_modified):
+    """Load the trained model."""
+
+    return load_bundle(Path(path))
+
+
+# Prepare the dashboard and load the model.
+sources = tuple(
+    str(frontend_sources[name])
+    for name in frontend_names
 )
 
-# Connect Streamlit to the dashboard interface.
+timestamps = tuple(
+    frontend_sources[name].stat().st_mtime_ns
+    for name in frontend_names
+)
+
+frontend = prepare_frontend(
+    sources,
+    timestamps
+)
+
+bundle = get_model(
+    str(model_path),
+    model_path.stat().st_mtime_ns
+)
+
+
+# Display the dashboard.
 dashboard = components.declare_component(
     "development_dashboard",
-    path=str(FRONTEND)
+    path=frontend
 )
 
-response = st.session_state.get("prediction_response")
-
 request = dashboard(
-    prediction_response=response,
+    prediction_response=st.session_state.get(
+        "prediction_response"
+    ),
     key="development_dashboard",
     default=None
 )
 
 
-# Process CSV files uploaded from the dashboard.
+# Process a CSV uploaded through the dashboard.
 if (
     isinstance(request, dict)
     and request.get("request_id")
@@ -101,19 +219,18 @@ if (
             or not isinstance(request.get("csv"), str)
         ):
             raise ValueError(
-                "Invalid upload request. Please select the CSV again."
+                "Invalid upload. Please select a CSV file again."
             )
 
         if len(request["csv"].encode("utf-8")) > 10 * 1024 * 1024:
             raise ValueError(
-                "Please select a CSV file smaller than 10 MB."
+                "Please choose a CSV file smaller than 10 MB."
             )
 
         input_data = pd.read_csv(
             StringIO(request["csv"])
         )
 
-        # Apply the saved preprocessing and K-Means model.
         predictions = predict_profiles(
             bundle,
             input_data
@@ -132,6 +249,7 @@ if (
         answer["error"] = str(error)
 
     st.session_state["handled_request_id"] = request_id
+
     st.session_state["prediction_response"] = answer
 
     st.rerun()
