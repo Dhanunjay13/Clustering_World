@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>World Development | Cluster Explorer</title>
+
+  <link rel="stylesheet" href="styles.css">
+
+  <script defer src="model.js"></script>
+  <script defer src="app.js"></script>
+</head>
+
+<body>
+  <div class="shell">
+
+    <aside class="sidebar">
+
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">✳</span>
+
+        <div>
+          <strong>WORLD DATA</strong>
+          <small>CLUSTER EXPLORER</small>
+        </div>
+      </div>
+
+      <div class="sidebar-label">WORKSPACE</div>
+
+      <nav aria-label="Main navigation">
+
+        <button
+          class="nav-link active"
+          data-page="explore"
+          aria-current="page"
+        >
+          <span aria-hidden="true">◈</span>
+          Explore countries
+        </button>
+
+        <button
+          class="nav-link"
+          data-page="predict"
+        >
+          <span aria-hidden="true">↗</span>
+          Classify new data
+        </button>
+
+        <button
+          class="nav-link"
+          data-page="about"
+        >
+          <span aria-hidden="true">◉</span>
+          About the model
+        </button>
+
+      </nav>
+
+      <div class="side-bottom">
+        <span class="live-dot"></span>
+        TRAINED MODEL READY
+        <br>
+        <small>Country-level analysis · K = 4</small>
+      </div>
+
+    </aside>
+
+
+    <main class="main">
+
+      <header class="topbar">
+
+        <div>
+          <span class="eyebrow">
+            GLOBAL DEVELOPMENT MEASUREMENT
+          </span>
+
+          <h1>Country cluster explorer</h1>
+
+          <p>
+            Explore patterns across country development indicators.
+          </p>
+        </div>
+
+        <span class="top-tag">
+          <span></span>
+          K-MEANS MODEL
+        </span>
+
+      </header>
+
+
+      <div
+        id="app-error"
+        class="error hidden"
+        role="alert"
+      ></div>
+
+
+      <div id="app-content" class="hidden">
+
+        <section class="metrics" aria-label="Model overview">
+
+          <article class="metric">
+            <span>COUNTRY PROFILES</span>
+            <strong id="metric-countries">208</strong>
+            <small>Training dataset</small>
+          </article>
+
+          <article class="metric">
+            <span>INDICATORS</span>
+            <strong id="metric-features">23</strong>
+            <small>Economy, health &amp; more</small>
+          </article>
+
+          <article class="metric">
+            <span>CLUSTERS</span>
+            <strong id="metric-clusters">4</strong>
+            <small>Groups of similar profiles</small>
+          </article>
+
+          <article class="metric">
+            <span>SILHOUETTE SCORE</span>
+            <strong id="metric-silhouette">0.307</strong>
+            <small>Training data</small>
+          </article>
+
+        </section>
+
+
+        <section id="page-explore" class="page">
+
+          <div class="section-head">
+            <div>
+              <span class="section-kicker">01 / EXPLORE</span>
+
+              <h2>Find a country's group</h2>
+
+              <p>
+                Each country is represented by its average across
+                the available records.
+              </p>
+            </div>
+          </div>
+
+
+          <div class="explore-grid">
+
+            <article class="card selected-card">
+
+              <div class="card-head">
+                <div>
+                  <h3>Country profile</h3>
+                  <p>Select a country to see its assignment.</p>
+                </div>
+
+                <span class="card-icon" aria-hidden="true">◎</span>
+              </div>
+
+              <label for="country-select">COUNTRY</label>
+
+              <select id="country-select"></select>
+
+              <div class="country-summary">
+
+                <div>
+                  <small>SELECTED PROFILE</small>
+                  <h4 id="country-name">India</h4>
+                  <p id="cluster-size"></p>
+                </div>
+
+                <span
+                  id="selected-cluster"
+                  class="cluster-tag"
+                >
+                  Cluster 0
+                </span>
+
+              </div>
+
+              <div
+                class="profile-stats"
+                id="profile-stats"
+              ></div>
+
+              <p class="footnote">
+                Values are original country averages, before
+                capping or imputation. Cluster IDs do not
+                represent rankings.
+              </p>
+
+            </article>
+
+
+            <article class="card plot-card">
+
+              <div class="card-head">
+                <div>
+                  <h3>Country similarity</h3>
+
+                  <p>
+                    First two principal components · select a point
+                  </p>
+                </div>
+
+                <span class="plot-label">PCA VIEW</span>
+              </div>
+
+              <div class="plot-wrap">
+                <svg
+                  id="scatter"
+                  viewBox="0 0 620 300"
+                  role="img"
+                  aria-label="Country PCA scatter plot"
+                ></svg>
+              </div>
+
+              <div class="legend" id="legend"></div>
+
+              <p class="footnote">
+                The model uses all retained components; this
+                two-dimensional view may show overlapping groups.
+              </p>
+
+            </article>
+
+          </div>
+
+
+          <div class="bottom-grid">
+
+            <article class="card distribution">
+
+              <div class="card-head">
+                <div>
+                  <h3>Cluster distribution</h3>
+                  <p>Training country profiles per group</p>
+                </div>
+              </div>
+
+              <div id="distribution"></div>
+
+            </article>
+
+
+            <article class="card table-card">
+
+              <div class="card-head table-head">
+
+                <div>
+                  <h3>Country assignments</h3>
+                  <p>Browse all training profiles</p>
+                </div>
+
+                <input
+                  id="search"
+                  type="search"
+                  placeholder="Search countries"
+                  aria-label="Search countries"
+                >
+
+              </div>
+
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>COUNTRY</th>
+                      <th>GROUP</th>
+                      <th>IMPUTED</th>
+                    </tr>
+                  </thead>
+
+                  <tbody id="country-table"></tbody>
+                </table>
+              </div>
+
+              <div id="table-count" class="table-count"></div>
+
+            </article>
+
+          </div>
+
+        </section>
+
+
+        <section id="page-predict" class="page hidden">
+
+          <div class="section-head">
+            <div>
+              <span class="section-kicker">02 / CLASSIFY</span>
+
+              <h2>Classify new profiles</h2>
+
+              <p>
+                Use the trained model to assign clusters to
+                your own country data.
+              </p>
+            </div>
+          </div>
+
+
+          <div class="upload-grid">
+
+            <article class="card upload-card">
+
+              <div class="step-number">1</div>
+
+              <h3>Prepare your file</h3>
+
+              <p>
+                Use a CSV file with <strong>Country</strong>
+                and the 23 indicator columns. Multiple rows
+                for the same country are averaged.
+              </p>
+
+              <button
+                id="download-template"
+                class="button secondary"
+              >
+                ↓ &nbsp; Download example CSV
+              </button>
+
+              <details>
+                <summary>View required columns</summary>
+
+                <div
+                  id="feature-list"
+                  class="feature-list"
+                ></div>
+              </details>
+
+              <p class="footnote">
+                Use the same units as the example. A % sign
+                is removed, but numbers are not divided by 100.
+              </p>
+
+            </article>
+
+
+            <article class="card upload-card">
+
+              <div class="step-number">2</div>
+
+              <h3>Upload and classify</h3>
+
+              <p>
+                Blank values are filled using the training
+                medians. Predictions use the saved model;
+                uploading does not retrain it.
+              </p>
+
+              <label class="file-box" for="csv-file">
+                <span aria-hidden="true">↥</span>
+                <strong>Choose a CSV file</strong>
+                <small>Processed by this Streamlit app</small>
+              </label>
+
+              <input
+                id="csv-file"
+                type="file"
+                accept=".csv,text/csv"
+                class="file-input"
+              >
+
+              <p class="footnote">
+                For an Excel file, save it as CSV first.
+              </p>
+
+              <div
+                id="upload-status"
+                class="upload-status"
+                role="status"
+              ></div>
+
+            </article>
+
+          </div>
+
+
+          <article
+            id="results-card"
+            class="card results-card hidden"
+          >
+
+            <div class="card-head">
+
+              <div>
+                <h3>Predicted groups</h3>
+                <p id="results-caption"></p>
+              </div>
+
+              <button
+                id="download-predictions"
+                class="button secondary"
+              >
+                ↓ &nbsp; Download results
+              </button>
+
+            </div>
+
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>COUNTRY</th>
+                    <th>GROUP</th>
+                    <th>IMPUTED INDICATORS</th>
+                  </tr>
+                </thead>
+
+                <tbody id="results-table"></tbody>
+              </table>
+            </div>
+
+          </article>
+
+        </section>
+
+
+        <section id="page-about" class="page hidden">
+
+          <div class="section-head">
+
+            <div>
+              <span class="section-kicker">
+                03 / METHODOLOGY
+              </span>
+
+              <h2>About the model</h2>
+
+              <p>
+                How the country groups were created and what they mean.
+              </p>
+            </div>
+
+          </div>
+
+
+          <div class="about-grid">
+
+            <article class="card about-card">
+
+              <span class="section-kicker">THE APPROACH</span>
+
+              <h3>From indicators to groups</h3>
+
+              <ol>
+                <li>
+                  <strong>Prepare profiles.</strong>
+                  Average each indicator by country. The source
+                  has no explicit year column.
+                </li>
+
+                <li>
+                  <strong>Process indicators.</strong>
+                  Cap outliers using IQR bounds and fill missing
+                  values with training medians.
+                </li>
+
+                <li>
+                  <strong>Scale and reduce.</strong>
+                  Standardize indicators and retain 12 principal
+                  components explaining about 95.55% of variance.
+                </li>
+
+                <li>
+                  <strong>Group countries.</strong>
+                  K-Means assigns each profile to one of four groups.
+                </li>
+              </ol>
+
+            </article>
+
+
+            <article class="card about-card">
+
+              <span class="section-kicker">
+                INTERPRETING RESULTS
+              </span>
+
+              <h3>What to keep in mind</h3>
+
+              <p>
+                Cluster numbers are arbitrary labels, not official
+                rankings of development.
+              </p>
+
+              <p>
+                The silhouette score describes separation on the
+                training data. It is not supervised accuracy.
+              </p>
+
+              <p>
+                The notebook compares K-Means with five other
+                algorithms. DBSCAN excludes noise from its scores.
+              </p>
+
+              <div class="insight">
+                <span>i</span>
+                New predictions reuse training preprocessing
+                and saved cluster centers.
+              </div>
+
+            </article>
+
+          </div>
+
+        </section>
+
+      </div>
+
+
+      <footer>
+        WORLD DEVELOPMENT CLUSTER EXPLORER
+        <span>·</span>
+        An analysis of the supplied dataset
+      </footer>
+
+    </main>
+
+  </div>
+</body>
+</html>
